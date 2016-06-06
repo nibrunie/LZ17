@@ -133,13 +133,6 @@ static char* emit_match_offset(char* out, int offset)
 }
 
 
-/** Try to compress @p avail_in from @p in buffer into @p out without exceeding @p avail_out bytes
- *  @param out output buffer
- *  @param avail_out available size in @p out
- *  @param in input data
- *  @param avail_in size of input data
- *  @return error code on error or LZ17_OK on success
- */
 int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t avail_in)
 {
   // number of byte used to compute the hash-value
@@ -227,5 +220,37 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
     litteral_cpy_addr = NULL;
     litteral_length   = 0;
   }
+
+}
+
+int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t avail_in)
+{
+  int bindex = 0;
+  while (bindex < avail_in) {
+    if (in[bindex] & BACK_REF) {
+      // back-reference
+      int match_length = in[bindex] & MAX_MATCH_SYMBOL;
+      int match_offset = READU32(in + bindex);
+      int k;
+      for (k = 0; k < match_length; ++k) out[k] = out[-match_offset + k];
+
+      out += match_length;
+      bindex += 5;
+    } else if (in[index] & BACK_REF == 0) {
+      int copy_length = in[bindex] & MAX_MATCH_SYMBOL;
+      bindex++;
+      int k;
+      for (k = 0; k < match_length; ++k) out[k] = in[bindex + k];
+
+       out += match_length;
+       in += match_length;
+
+    } else {
+      assert(0 && "unrecognized byte pattern");
+    }
+
+  }
+
+  return LZ17_OK;
 
 }
