@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <assert.h>
 
 #include "lib/compress.h"
@@ -40,17 +41,16 @@ hash_t* hash_init(int key_size, int value_number)
  *  @return NULL if no value is associated with the key, of the address of the previous
  *  byte string which matches the key value
  */
-char* hash_contains(hash_t* hash, int hash_value) 
+char* hash_contains(hash_t* hash, unsigned hash_value) 
 {
-  assert(hash_value < hash->value_number && "hash index exceeds hash table size");
-  char* value_addr = hash->table[hash_value];
+  char* value_addr = hash->table[hash_value % hash->value_number];
 
   return value_addr;
 }
 
-int hash_update(hash_t* hash, int hash_value, char* baddr, char* in) 
+int hash_update(hash_t* hash, unsigned hash_value, char* baddr, char* in) 
 {
-  hash->table[hash_value] = baddr;
+  hash->table[hash_value % hash->value_number] = baddr;
 
   return LZ17_OK;
 }
@@ -161,9 +161,10 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
   // byte-index
   int bindex = -1, litteral_length = 0;
   char* litteral_cpy_addr = NULL;
-  for (bindex = 0; bindex < avail_in - hash_in_size; ++bindex) {
-    int bhash = lz17_hash4(in + bindex);
+  for (bindex = 0; bindex < avail_in - hash_in_size;) {
+    unsigned bhash = lz17_hash4(in + bindex);
     char* value_addr = NULL;
+    char* search_addr = in + bindex;
     // if the hash table contains a match, then check and extend it
     if (value_addr = hash_contains(hash, bhash)) {
       int match_length = get_match_length(value_addr, in + bindex, avail_in - bindex);
@@ -194,29 +195,39 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
 
           value_addr += MAX_MATCH_SYMBOL_LENGTH;
           match_length -= MAX_MATCH_SYMBOL_LENGTH;
+          bindex += MAX_MATCH_SYMBOL_LENGTH;
         }
         if (match_length > 0) {
           out = emit_byte(out, BACK_REF | match_length);
           out = emit_match_offset(out, (in + bindex - value_addr));
 
           value_addr   += match_length;
+          bindex += match_length;
           match_length -= match_length;
         }
-        bindex += total_match_length; 
+        // bindex += total_match_length; 
 
       } else {
         // emit a litteral copy
         if (litteral_length == 0) litteral_cpy_addr = in + bindex;
         litteral_length++;
+        bindex++;
       };
       
     } else {
       // emit a litteral copy
       if (litteral_length == 0) litteral_cpy_addr = in + bindex;
       litteral_length++;
+      bindex++;
     }
     // update 
-    hash_update(hash, bhash, in + bindex, in);
+    hash_update(hash, bhash, search_addr, in);
+  };
+
+  // flushing between outside hash_in_size
+  if (bindex < avail_in) {
+    if (litteral_length == 0) litteral_cpy_addr = in + bindex;
+      litteral_length += (avail_in - bindex);
   };
 
   // flush litteral copy if necessary
@@ -248,20 +259,53 @@ int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t 
     if (in[bindex] & BACK_REF) {
       // back-reference
       int match_length = in[bindex] & MAX_MATCH_SYMBOL;
+      bindex++;
       int match_offset = READU32(in + bindex);
+      bindex += 4;
       int k;
       for (k = 0; k < match_length; ++k) out[k] = out[-match_offset + k];
 
       out += match_length;
-      bindex += 5;
-    } else if (in[bindex] & BACK_REF == 0) {
+    } else if (!(in[bindex] & BACK_REF)) {
       int copy_length = in[bindex] & MAX_MATCH_SYMBOL;
       bindex++;
       int k;
       for (k = 0; k < copy_length; ++k) out[k] = in[bindex + k];
 
        out += copy_length;
-       in += copy_length;
+       bindex += copy_length;
+
+    } else {
+      assert(0 && "unrecognized byte pattern");
+    }
+
+  }
+
+  return LZ17_OK;
+
+}
+
+int lz17_displayCompressedStream(char* in, size_t avail_in)
+{
+  int bindex = 0;
+  while (bindex < avail_in) {
+    if (in[bindex] & BACK_REF) {
+      // back-reference
+      int match_length = in[bindex] & MAX_MATCH_SYMBOL;
+      bindex++;
+      int match_offset = READU32(in + bindex);
+      bindex += 4;
+      printf("BACK_REF(len=%d,offset=%d)\n", match_length, match_offset);
+      int k;
+    } else if (!(in[bindex] & BACK_REF)) {
+      int copy_length = in[bindex] & MAX_MATCH_SYMBOL;
+      bindex++;
+      int k;
+      printf("COPY(len=%d) [ ", copy_length);
+      for (k = 0; k < copy_length; ++k) printf("%2x ", in[bindex + k]);
+      printf(" ]\n");
+
+       bindex += copy_length;
 
     } else {
       assert(0 && "unrecognized byte pattern");

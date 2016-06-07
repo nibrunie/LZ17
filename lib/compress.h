@@ -17,3 +17,9 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
 int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t avail_in);
 
 
+/** Display the content (lz17 commands) of a compressed stream
+ *  @param in input stream (compressed)
+ *  @param avail_in size of input stream
+ *  @return error code on error, LZ17_OK on success
+ */
+int lz17_displayCompressedStream(char* in, size_t avail_in);
