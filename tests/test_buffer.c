@@ -14,7 +14,7 @@ int test(char* input, int input_size)
   int compressed_size = lz17_compressBufferToBuffer(compressed, input_size * 2, input, input_size);
 
   printf("compressed size is %d B\n", compressed_size);
-  lz17_displayCompressedStream(compressed, compressed_size);
+  // lz17_displayCompressedStream(compressed, compressed_size);
 
   int ret = lz17_decompressBufferToBuffer(decompressed, input_size, compressed, compressed_size);
 
@@ -51,7 +51,7 @@ int main(void) {
 
   for (i = 0; i < input_size; ++i) input[i] = 0x2a + (rand() % 4);
   printf("testing compression/decompression on an almost uniform 512B buffer\n");
-  if (!test(input, 64)) printf("success\n");
+  if (!test(input, 512)) printf("success\n");
   else { printf("failure\n"); return 1;};
 
   free(input);

@@ -3,7 +3,11 @@
 #include <stdio.h>
 #include <assert.h>
 
+#include "arith_coding.h" 
+
 #include "lib/compress.h"
+
+
 
 /** error code */
 enum {
@@ -88,6 +92,8 @@ enum {
   MAX_MATCH_SYMBOL = 0x7f
 };
 
+const unsigned char LZ17_HEADER = 0x11;
+
 // match length encoded by MAX_MATCH_SYMBOL
 #define MAX_MATCH_SYMBOL_LENGTH 127
 #define MAX_CPY_LENGTH          127
@@ -137,7 +143,7 @@ static char* emit_byte(char* out, char byte)
   return ++out;
 }
 
-static char* emit_match_offset(char* out, int offset) 
+static char* emit_4byte_le(char* out, int offset) 
 {
   out = emit_byte(out, offset & 0xff);
   out = emit_byte(out, (offset >> 8) & 0xff);
@@ -146,6 +152,11 @@ static char* emit_match_offset(char* out, int offset)
   return out;
 }
 
+static char* emit_match_offset(char* out, int offset) 
+{
+  assert(sizeof(int) == 4);
+  return emit_4byte_le(out, offset);
+}
 
 int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t avail_in)
 {
@@ -157,6 +168,11 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
   const char* out_start = out;
 
   hash_t* hash = hash_init(4, hash_size); 
+  
+  // put LZ17 specific header
+  out = emit_byte(out, LZ17_HEADER);
+  // enqueud expected decompressed size
+  out = emit_4byte_le(out, avail_in);
 
   // byte-index
   int bindex = -1, litteral_length = 0;
@@ -255,6 +271,16 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
 int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t avail_in)
 {
   int bindex = 0;
+
+  // read and check headers
+  char buffer_header = in[bindex++];
+  assert(buffer_header == LZ17_HEADER);
+
+  int buffer_size = READU32(in + bindex);
+  bindex += 4;
+  assert(buffer_size <= avail_out);
+
+  // read expected decompressed size
   while (bindex < avail_in) {
     if (in[bindex] & BACK_REF) {
       // back-reference
@@ -316,3 +342,4 @@ int lz17_displayCompressedStream(char* in, size_t avail_in)
   return LZ17_OK;
 
 }
+

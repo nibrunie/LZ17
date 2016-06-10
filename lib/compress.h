@@ -1,3 +1,8 @@
+/** \defgroup compress compress
+ *  \brief compression functions using LZ17 algorithms and format
+ *   @{
+ */
+
 /** Try to compress @p avail_in from @p in buffer into @p out without exceeding @p avail_out bytes
  *  @param out output buffer
  *  @param avail_out available size in @p out
@@ -7,7 +12,7 @@
  */
 int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t avail_in);
 
-/* Decompress from a byte buffer into a byte buffer
+/** Decompress from a byte buffer into a byte buffer
  * @param out output buffer to receive decompress data
  * @param avail_out size of available space for decompression in @p out
  * @param int input buffer containing compress frame
@@ -23,3 +28,5 @@ int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t 
  *  @return error code on error, LZ17_OK on success
  */
 int lz17_displayCompressedStream(char* in, size_t avail_in);
+
+/** @} */
