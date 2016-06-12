@@ -29,6 +29,7 @@ int main(int argc, char** argv) {
   int errorflag = 0;
   int extract = 0;
   int compress = 0;
+  char c = '?';
 
   while ((c = getopt(argc, argv, "xci:o:")) != -1)
   {
@@ -50,13 +51,13 @@ int main(int argc, char** argv) {
       break;
     case 'c':
       compress = 1;
-      if (compress) fprintf(stderr, "Option -x and -x and incompatible\n");
+      if (extract) fprintf(stderr, "Option -x and -x and incompatible\n");
       break;
     case '?':
     default: 
       fprintf(stderr, "Unrecognized option: -%c\n", optopt);
       errorflag++;
-      break:
+      break;
     };
   }
 
@@ -68,25 +69,40 @@ int main(int argc, char** argv) {
   FILE* input_stream  = fopen(input_filename, "r");
   FILE* output_stream = fopen(output_filename, "w");
 
-  size_t input_size   = fsize(filename);
+  size_t input_size   = fsize(input_filename);
   size_t read_buffer_size = input_size;
 
   char* read_buffer    = malloc(input_size * sizeof(char));
-  char* output_buffer  = malloc((input_size + 100) * sizeof(char));
 
   size_t read_size = fread(read_buffer, sizeof(char), read_buffer_size, input_stream);
 
   if (compress) {
+    size_t output_buffer_size = input_size * 2;
+    char* output_buffer  = malloc(output_buffer_size * sizeof(char));
+
+
     int compressed_size = lz17_compressBufferToBuffer(output_buffer, output_buffer_size, read_buffer, read_size);
 
+
+    free(read_buffer);
+    free(output_buffer);
+
+    fwrite(output_buffer, compressed_size, sizeof(char), output_stream);
+
   } else if (extract) {
+    size_t output_buffer_size = input_size * 2;
+    char*  output_buffer  = malloc(output_buffer_size * sizeof(char));
+
+    int decompressed_size = lz17_decompressBufferToBuffer(output_buffer, output_buffer_size, read_buffer, read_size); 
+    fwrite(output_buffer, decompressed_size, sizeof(char), output_stream);
+
+    free(read_buffer);
+    free(output_buffer);
 
   } else assert(0 && "unsupported action");
 
-
   fclose(input_stream);
   fclose(output_stream);
-
 
   return 0;
 }

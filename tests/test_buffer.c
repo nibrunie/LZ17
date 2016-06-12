@@ -36,25 +36,41 @@ int test(char* input, int input_size)
 
 int main(void) {
   srand(0);
-  size_t input_size = 512;
-  char* input        = malloc(sizeof(char) * input_size);
+  {
+    size_t input_size = 512;
+    char* input        = malloc(sizeof(char) * input_size);
 
-  int i;
-  for (i = 0; i < input_size; ++i) input[i] = 0x2a; // rand();
-  printf("testing compression/decompression on 64B uniform buffer\n");
-  if (!test(input, 64)) printf("success\n");
-  else { printf("failure\n"); return 1;};
+    int i;
+    for (i = 0; i < input_size; ++i) input[i] = 0x2a; // rand();
+    printf("testing compression/decompression on 64B uniform buffer\n");
+    if (!test(input, 64)) printf("success\n");
+    else { printf("failure\n"); return 1;};
 
-  printf("testing compression/decompression on 512B uniform buffer\n");
-  if (!test(input, 512)) printf("success\n");
-  else { printf("failure\n"); return 1;};
+    printf("testing compression/decompression on 512B uniform buffer\n");
+    if (!test(input, 512)) printf("success\n");
+    else { printf("failure\n"); return 1;};
 
-  for (i = 0; i < input_size; ++i) input[i] = 0x2a + (rand() % 4);
-  printf("testing compression/decompression on an almost uniform 512B buffer\n");
-  if (!test(input, 512)) printf("success\n");
-  else { printf("failure\n"); return 1;};
+    for (i = 0; i < input_size; ++i) input[i] = 0x2a + (rand() % 3);
+    printf("testing compression/decompression on an almost uniform 512B buffer\n");
+    if (!test(input, 512)) printf("success\n");
+    else { printf("failure\n"); return 1;};
 
-  free(input);
+    free(input);
+  }
+  {
+    size_t input_size = 1 << 16;
+    char* input        = malloc(sizeof(char) * input_size);
+
+    int i;
+    for (i = 0; i < input_size; ++i) input[i] = 0x2a; // rand();
+
+    for (i = 0; i < input_size; ++i) input[i] = 0x2a + (rand() % 3);
+    printf("testing compression/decompression on an almost uniform %dB buffer\n", input_size);
+    if (!test(input, input_size)) printf("success\n");
+    else { printf("failure\n"); return 1;};
+
+    free(input);
+  }
 
   return 0;
 }

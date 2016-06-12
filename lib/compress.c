@@ -268,6 +268,20 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
   return out - out_start;
 }
 
+int lz17_bufferExtractExpandedSize(char* in)
+{
+  int bindex = 0;
+
+  // read and check headers
+  char buffer_header = in[bindex++];
+  assert(buffer_header == LZ17_HEADER);
+
+  int expanded_size = READU32(in + bindex);
+  bindex += 4;
+  
+  return expanded_size; 
+};
+
 int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t avail_in)
 {
   int bindex = 0;
@@ -279,6 +293,8 @@ int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t 
   int buffer_size = READU32(in + bindex);
   bindex += 4;
   assert(buffer_size <= avail_out);
+
+  char* out_start = out;
 
   // read expected decompressed size
   while (bindex < avail_in) {
@@ -307,7 +323,7 @@ int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t 
 
   }
 
-  return LZ17_OK;
+  return out - out_start;;
 
 }
 
