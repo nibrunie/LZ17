@@ -131,10 +131,20 @@ static unsigned XXH32_round(unsigned seed, unsigned input)
 /** read 4-byte from a char* buffer */
 #define READU32(x) ((U(UCP(x)[0]) << 0) | (U(UCP(x)[1]) << 8) | (U(UCP(x)[2]) << 16) | (U(UCP(x)[3]) << 24))
 
+#define READU24(x) ((U(UCP(x)[0]) << 0) | (U(UCP(x)[1]) << 8) | (U(UCP(x)[2]) << 16))
+
+#define READU16(x) ((U(UCP(x)[0]) << 0) | (U(UCP(x)[1]) << 8))
+
 /** Hash 4-Byte from @p in */
 unsigned lz17_hash4(char* in)
 {
   return XXH32_round(LZ17_HASH_SEED, READU32(in));
+}
+
+/** Hash 3-Byte from @p in */
+unsigned lz17_hash3(char* in)
+{
+  return XXH32_round(LZ17_HASH_SEED, READU24(in));
 }
 
 static char* emit_byte(char* out, char byte) 
@@ -152,10 +162,30 @@ static char* emit_4byte_le(char* out, int offset)
   return out;
 }
 
+static char* emit_2byte_le(char* out, int offset) 
+{
+  out = emit_byte(out, offset & 0xff);
+  out = emit_byte(out, (offset >> 8) & 0xff);
+  return out;
+}
+
 static char* emit_match_offset(char* out, int offset) 
 {
   assert(sizeof(int) == 4);
-  return emit_4byte_le(out, offset);
+  return emit_2byte_le(out, offset);
+}
+
+/** read a match offset from in + bindex
+ *  and update bindex accordingly
+ *  @param in input array
+ *  @param pindex adresse of the current read index in @p in
+ *  @return read match_offset (while updating *pindex value)
+ */
+static int read_match_offset(char* in, int* pindex) 
+{
+  int match_offset = READU16(in + *pindex);
+  *pindex += 2;
+  return match_offset;
 }
 
 int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t avail_in)
@@ -163,7 +193,7 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
   // number of byte used to compute the hash-value
   const int hash_in_size = 4;
   const int hash_size = 1 << 12;
-  const int min_match_size = 4;
+  const int min_match_size = 3;
 
   const char* out_start = out;
 
@@ -178,7 +208,7 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
   int bindex = -1, litteral_length = 0;
   char* litteral_cpy_addr = NULL;
   for (bindex = 0; bindex < avail_in - hash_in_size;) {
-    unsigned bhash = lz17_hash4(in + bindex);
+    unsigned bhash = lz17_hash3(in + bindex);
     char* value_addr = NULL;
     char* search_addr = in + bindex;
     // if the hash table contains a match, then check and extend it
@@ -302,8 +332,8 @@ int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t 
       // back-reference
       int match_length = in[bindex] & MAX_MATCH_SYMBOL;
       bindex++;
-      int match_offset = READU32(in + bindex);
-      bindex += 4;
+      int match_offset = read_match_offset(in, &bindex);//READU32(in + bindex);
+      // bindex += 4;
       int k;
       for (k = 0; k < match_length; ++k) out[k] = out[-match_offset + k];
 
