@@ -58,7 +58,7 @@ int main(void) {
     free(input);
   }
   {
-    size_t input_size = 1 << 16;
+    size_t input_size = 1 << 18;
     char* input        = malloc(sizeof(char) * input_size);
 
     int i;
