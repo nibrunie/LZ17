@@ -97,6 +97,7 @@ const unsigned char LZ17_HEADER = 0x11;
 // match length encoded by MAX_MATCH_SYMBOL
 #define MAX_MATCH_SYMBOL_LENGTH 127
 #define MAX_CPY_LENGTH          127
+#define MAX_MATCH_OFFSET        ((1 << 16) - 1)
 
 #define MAX_CPY_SYMBOL 0x7f
 
@@ -214,7 +215,9 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
     // if the hash table contains a match, then check and extend it
     if (value_addr = hash_contains(hash, bhash)) {
       int match_length = get_match_length(value_addr, in + bindex, avail_in - bindex);
-      if (match_length > min_match_size) {
+      // initial match offset
+      int match_offset = (in + bindex - value_addr);
+      if (match_length > min_match_size && match_offset <= MAX_MATCH_OFFSET) {
         // if there is a pending litteral copy flush it
         if (litteral_length > 0) {
           while (litteral_length > MAX_CPY_LENGTH) {
