@@ -80,14 +80,13 @@ int main(int argc, char** argv) {
     size_t output_buffer_size = input_size * 2;
     char* output_buffer  = malloc(output_buffer_size * sizeof(char));
 
-
     int compressed_size = lz17_compressBufferToBuffer(output_buffer, output_buffer_size, read_buffer, read_size);
 
+    // copy compressed buffer to output file
+    fwrite(output_buffer, compressed_size, sizeof(char), output_stream);
 
     free(read_buffer);
     free(output_buffer);
-
-    fwrite(output_buffer, compressed_size, sizeof(char), output_stream);
 
   } else if (extract) {
     size_t output_buffer_size = input_size * 2;
