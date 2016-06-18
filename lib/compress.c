@@ -20,8 +20,10 @@ void lz17_compressInit(lz17_state_t* state, lz17_entropy_mode_t entropy_mode)
 {
   state->entropy_mode = entropy_mode;
 
-  init_state(&state->ac_state, 16 /* precision */);
-  reset_uniform_probability(&state->ac_state);
+  if (entropy_mode == LZ17_AC_ENTROPY_CODING) {
+    init_state(&state->ac_state, 16 /* precision */);
+    reset_uniform_probability(&state->ac_state);
+  }
 }
 
 /** hash structure to keep track of previous matches
@@ -101,10 +103,12 @@ enum {
   MAX_MATCH_SYMBOL = 0x7f
 };
 
-/** LZ17 compression */
-const unsigned char LZ17_HEADER = 0x11;
-/** LZ17 compression with arithmetic coding */
-const unsigned char LZ17_HEADER_AC = 0x12;
+typedef enum {
+  /** LZ17 compression */
+  LZ17_HEADER = 0x11,
+  /** LZ17 compression with arithmetic coding */
+  LZ17_HEADER_AC = 0x12
+} lz17_header_byte_t;
 
 #define is_valid_lz17_header(byte) ((byte) == LZ17_HEADER || (byte) == LZ17_HEADER_AC)
 
@@ -162,18 +166,27 @@ unsigned lz17_hash3(char* in)
   return XXH32_round(LZ17_HASH_SEED, READU24(in));
 }
 
-static void __emit_byte(lz17_state_t* zstate, char byte) 
+static void __emit_header_byte(lz17_state_t* zstate, char byte) 
 {
   *(zstate->next_out) = byte;
   zstate->next_out++;
 }
 
-static void __emit_4byte_le(lz17_state_t* zstate, int offset) 
+static void __emit_byte(lz17_state_t* zstate, char byte) 
 {
-  __emit_byte(zstate, offset & 0xff);
-  __emit_byte(zstate, (offset >> 8) & 0xff);
-  __emit_byte(zstate, (offset >> 16) & 0xff);
-  __emit_byte(zstate, (offset >> 24) & 0xff);
+  if (zstate->entropy_mode == LZ17_NO_ENTROPY_CODING) {
+    __emit_header_byte(zstate, byte);
+  } else if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
+    encode_character(zstate->next_out, byte, &(zstate->ac_state));
+  } // FIXME, final else / assert
+}
+
+static void __emit_header_4byte_le(lz17_state_t* zstate, int offset) 
+{
+  __emit_header_byte(zstate, offset & 0xff);
+  __emit_header_byte(zstate, (offset >> 8) & 0xff);
+  __emit_header_byte(zstate, (offset >> 16) & 0xff);
+  __emit_header_byte(zstate, (offset >> 24) & 0xff);
 }
 
 static  __emit_2byte_le(lz17_state_t* zstate, int offset) 
@@ -218,17 +231,17 @@ int lz17_compressBufferToBuffer(lz17_state_t* zstate, char* out, size_t avail_ou
   switch(zstate->entropy_mode)
   {
   case LZ17_NO_ENTROPY_CODING:
-    __emit_byte(zstate, LZ17_HEADER);
+    __emit_header_byte(zstate, LZ17_HEADER);
     break;
   case LZ17_AC_ENTROPY_CODING:
-    __emit_byte(zstate, LZ17_HEADER_AC);
+    __emit_header_byte(zstate, LZ17_HEADER_AC);
     break;
   default:
     assert(0 && "unsupported entropy_mode");
   }
 
   // enqueud expected decompressed size
-  __emit_4byte_le(zstate, avail_in);
+  __emit_header_4byte_le(zstate, avail_in);
 
   // byte-index
   int bindex = -1, litteral_length = 0;
@@ -322,13 +335,16 @@ int lz17_compressBufferToBuffer(lz17_state_t* zstate, char* out, size_t avail_ou
     litteral_length   = 0;
   }
 
-  if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) 
-  {
-
-  }
-
-
-  return zstate->next_out - out_start;
+  if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
+    select_value(zstate->next_out, &(zstate->ac_state));
+    size_t encoded_size = (zstate->ac_state.out_index + 7) / 8;
+    // next_out is not shifted by arithmetic coding
+    // but was by header insertion, the following formula
+    // allow us to add arithmetic coded size + header size
+    return (zstate->next_out + encoded_size) - out_start;
+  } else {
+    return zstate->next_out - out_start;
+  };
 }
 
 int lz17_bufferExtractExpandedSize(char* in)
@@ -345,13 +361,27 @@ int lz17_bufferExtractExpandedSize(char* in)
   return expanded_size; 
 };
 
+
 int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t avail_in)
 {
   int bindex = 0;
 
+  lz17_state_t* zstate = malloc(sizeof(zstate));
+
   // read and check headers
   char buffer_header = in[bindex++];
   assert(is_valid_lz17_header(buffer_header));
+
+  switch(buffer_header) {
+  case LZ17_HEADER:
+    zstate->entropy_mode = LZ17_NO_ENTROPY_CODING;
+    break;
+  case LZ17_HEADER_AC:
+    zstate->entropy_mode = LZ17_AC_ENTROPY_CODING;
+    break;
+  default:
+    assert(0 && "unsupported LZ17 headers");
+  }
 
   int buffer_size = READU32(in + bindex);
   bindex += 4;
