@@ -92,7 +92,12 @@ enum {
   MAX_MATCH_SYMBOL = 0x7f
 };
 
+/** LZ17 compression */
 const unsigned char LZ17_HEADER = 0x11;
+/** LZ17 compression with arithmetic coding */
+const unsigned char LZ17_HEADER_AC = 0x12;
+
+#define is_valid_lz17_header(byte) ((byte) == LZ17_HEADER || (byte) == LZ17_HEADER_AC)
 
 // match length encoded by MAX_MATCH_SYMBOL
 #define MAX_MATCH_SYMBOL_LENGTH 127
@@ -193,7 +198,7 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
 {
   // number of byte used to compute the hash-value
   const int hash_in_size = 4;
-  const int hash_size = 1 << 12;
+  const int hash_size = 1 << 16;
   const int min_match_size = 3;
 
   const char* out_start = out;
@@ -307,7 +312,7 @@ int lz17_bufferExtractExpandedSize(char* in)
 
   // read and check headers
   char buffer_header = in[bindex++];
-  assert(buffer_header == LZ17_HEADER);
+  assert(is_valid_lz17_header(buffer_header));
 
   int expanded_size = READU32(in + bindex);
   bindex += 4;
@@ -321,7 +326,7 @@ int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t 
 
   // read and check headers
   char buffer_header = in[bindex++];
-  assert(buffer_header == LZ17_HEADER);
+  assert(is_valid_lz17_header(buffer_header));
 
   int buffer_size = READU32(in + bindex);
   bindex += 4;

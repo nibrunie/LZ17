@@ -17,7 +17,7 @@ clean: $(LIB_OBJECTS) liblz17.a
 	rm -f $^ $(TEST_LIST)
 
 lz17utils: liblz17.a utils/comp_util.c
-	$(CC) $(CFLAGS) $(LFLAGS) -Ilib utils/comp_util.c -o lz17utils liblz17.a $(LIB_ARITH_CODING)
+	$(CC) $(CFLAGS) $(LFLAGS) -I$(ARITH_CODING_PATH) -Ilib utils/comp_util.c -o lz17utils liblz17.a $(LIB_ARITH_CODING)
 
 define gen_test_rule
 $(1): tests/$(1).o liblz17.a
