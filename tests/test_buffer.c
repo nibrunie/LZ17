@@ -11,7 +11,10 @@ int test(char* input, int input_size)
   char* decompressed = malloc(sizeof(char) * input_size * 2);
   assert(compressed && decompressed && "compressed/decompressed buffer allocation failed");
 
-  int compressed_size = lz17_compressBufferToBuffer(compressed, input_size * 2, input, input_size);
+  lz17_state_t* zstate = malloc(sizeof(lz17_state_t));
+  lz17_compressInit(zstate, LZ17_NO_ENTROPY_CODING);
+
+  int compressed_size = lz17_compressBufferToBuffer(zstate, compressed, input_size * 2, input, input_size);
 
   printf("compressed size is %d B\n", compressed_size);
   // lz17_displayCompressedStream(compressed, compressed_size);
@@ -27,6 +30,7 @@ int test(char* input, int input_size)
   }
 
   // free-ing buffer
+  free(zstate);
   free(compressed);
   free(decompressed);
 

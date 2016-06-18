@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <assert.h>
 
-#include "arith_coding.h" 
 
 #include "lib/compress.h"
 
@@ -14,6 +13,16 @@ enum {
   /** no error */
   LZ17_OK = 0
 };
+
+
+
+void lz17_compressInit(lz17_state_t* state, lz17_entropy_mode_t entropy_mode)
+{
+  state->entropy_mode = entropy_mode;
+
+  init_state(&state->ac_state, 16 /* precision */);
+  reset_uniform_probability(&state->ac_state);
+}
 
 /** hash structure to keep track of previous matches
  *  key is a hash of input byte
@@ -153,32 +162,30 @@ unsigned lz17_hash3(char* in)
   return XXH32_round(LZ17_HASH_SEED, READU24(in));
 }
 
-static char* emit_byte(char* out, char byte) 
+static void __emit_byte(lz17_state_t* zstate, char byte) 
 {
-  *out = byte;
-  return ++out;
+  *(zstate->next_out) = byte;
+  zstate->next_out++;
 }
 
-static char* emit_4byte_le(char* out, int offset) 
+static void __emit_4byte_le(lz17_state_t* zstate, int offset) 
 {
-  out = emit_byte(out, offset & 0xff);
-  out = emit_byte(out, (offset >> 8) & 0xff);
-  out = emit_byte(out, (offset >> 16) & 0xff);
-  out = emit_byte(out, (offset >> 24) & 0xff);
-  return out;
+  __emit_byte(zstate, offset & 0xff);
+  __emit_byte(zstate, (offset >> 8) & 0xff);
+  __emit_byte(zstate, (offset >> 16) & 0xff);
+  __emit_byte(zstate, (offset >> 24) & 0xff);
 }
 
-static char* emit_2byte_le(char* out, int offset) 
+static  __emit_2byte_le(lz17_state_t* zstate, int offset) 
 {
-  out = emit_byte(out, offset & 0xff);
-  out = emit_byte(out, (offset >> 8) & 0xff);
-  return out;
+  __emit_byte(zstate, offset & 0xff);
+  __emit_byte(zstate, (offset >> 8) & 0xff);
 }
 
-static char* emit_match_offset(char* out, int offset) 
+static void __emit_match_offset(lz17_state_t* zstate, int offset) 
 {
   assert(sizeof(int) == 4);
-  return emit_2byte_le(out, offset);
+  __emit_2byte_le(zstate, offset);
 }
 
 /** read a match offset from in + bindex
@@ -194,7 +201,7 @@ static int read_match_offset(char* in, int* pindex)
   return match_offset;
 }
 
-int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t avail_in)
+int lz17_compressBufferToBuffer(lz17_state_t* zstate, char* out, size_t avail_out, char* in, size_t avail_in)
 {
   // number of byte used to compute the hash-value
   const int hash_in_size = 4;
@@ -202,13 +209,26 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
   const int min_match_size = 3;
 
   const char* out_start = out;
+  zstate->next_out  = out;
+  zstate->avail_out = avail_out;
 
   hash_t* hash = hash_init(4, hash_size); 
   
   // put LZ17 specific header
-  out = emit_byte(out, LZ17_HEADER);
+  switch(zstate->entropy_mode)
+  {
+  case LZ17_NO_ENTROPY_CODING:
+    __emit_byte(zstate, LZ17_HEADER);
+    break;
+  case LZ17_AC_ENTROPY_CODING:
+    __emit_byte(zstate, LZ17_HEADER_AC);
+    break;
+  default:
+    assert(0 && "unsupported entropy_mode");
+  }
+
   // enqueud expected decompressed size
-  out = emit_4byte_le(out, avail_in);
+  __emit_4byte_le(zstate, avail_in);
 
   // byte-index
   int bindex = -1, litteral_length = 0;
@@ -226,16 +246,16 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
         // if there is a pending litteral copy flush it
         if (litteral_length > 0) {
           while (litteral_length > MAX_CPY_LENGTH) {
-            out = emit_byte(out, LITTERAL | MAX_CPY_SYMBOL);
+            __emit_byte(zstate, LITTERAL | MAX_CPY_SYMBOL);
             int k;
-            for (k = 0; k < MAX_CPY_LENGTH; ++k) out = emit_byte(out, litteral_cpy_addr[k]);
+            for (k = 0; k < MAX_CPY_LENGTH; ++k) __emit_byte(zstate, litteral_cpy_addr[k]);
             litteral_cpy_addr += MAX_CPY_LENGTH;
             litteral_length   -= MAX_CPY_LENGTH; 
           }
           if (litteral_length > 0) {
-            out = emit_byte(out, LITTERAL | litteral_length);
+            __emit_byte(zstate, LITTERAL | litteral_length);
             int k;
-            for (k = 0; k < litteral_length; ++k) out = emit_byte(out, litteral_cpy_addr[k]);
+            for (k = 0; k < litteral_length; ++k) __emit_byte(zstate, litteral_cpy_addr[k]);
           }
           litteral_cpy_addr = NULL;
           litteral_length   = 0;
@@ -244,16 +264,16 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
         // emit a back-reference
         size_t total_match_length = match_length;
         while (match_length > MAX_MATCH_SYMBOL_LENGTH) {
-          out = emit_byte(out, BACK_REF | MAX_MATCH_SYMBOL);
-          out = emit_match_offset(out, (in + bindex - value_addr));
+          __emit_byte(zstate, BACK_REF | MAX_MATCH_SYMBOL);
+          __emit_match_offset(zstate, (in + bindex - value_addr));
 
           value_addr += MAX_MATCH_SYMBOL_LENGTH;
           match_length -= MAX_MATCH_SYMBOL_LENGTH;
           bindex += MAX_MATCH_SYMBOL_LENGTH;
         }
         if (match_length > 0) {
-          out = emit_byte(out, BACK_REF | match_length);
-          out = emit_match_offset(out, (in + bindex - value_addr));
+          __emit_byte(zstate, BACK_REF | match_length);
+          __emit_match_offset(zstate, (in + bindex - value_addr));
 
           value_addr   += match_length;
           bindex += match_length;
@@ -287,23 +307,28 @@ int lz17_compressBufferToBuffer(char* out, size_t avail_out, char* in, size_t av
   // flush litteral copy if necessary
   if (litteral_length > 0) {
     while (litteral_length > MAX_CPY_LENGTH) {
-      out = emit_byte(out, LITTERAL | MAX_CPY_SYMBOL);
+      __emit_byte(zstate, LITTERAL | MAX_CPY_SYMBOL);
       int k;
-      for (k = 0; k < MAX_CPY_LENGTH; ++k) out = emit_byte(out, litteral_cpy_addr[k]);
+      for (k = 0; k < MAX_CPY_LENGTH; ++k) __emit_byte(zstate, litteral_cpy_addr[k]);
       litteral_cpy_addr += MAX_CPY_LENGTH;
       litteral_length   -= MAX_CPY_LENGTH; 
     }
     if (litteral_length > 0) {
-      out = emit_byte(out, LITTERAL | litteral_length);
+      __emit_byte(zstate, LITTERAL | litteral_length);
       int k;
-      for (k = 0; k < litteral_length; ++k) out = emit_byte(out, litteral_cpy_addr[k]);
+      for (k = 0; k < litteral_length; ++k) __emit_byte(zstate, litteral_cpy_addr[k]);
     }
     litteral_cpy_addr = NULL;
     litteral_length   = 0;
   }
 
+  if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) 
+  {
 
-  return out - out_start;
+  }
+
+
+  return zstate->next_out - out_start;
 }
 
 int lz17_bufferExtractExpandedSize(char* in)
