@@ -18,12 +18,24 @@ typedef struct {
   /** entropy mode selected */
   lz17_entropy_mode_t entropy_mode;
   /** If arithmetic coding is used, store internal coder/decoder state */
-  ac_state_t ac_state;
+  ac_state_t* ac_state;
 
   /** amount of currently available room in output buffer */
   int   avail_out;
   /** next byte to be written in output buffer */
   char* next_out;
+
+  /** number of symbol encoded since last symbol probability table update */
+  int update_count;
+  /** number of symbol to encode between two symbol probability table updates */
+  int update_range;
+  /** enable clearing of symbol probability table during each update */
+  int range_clear;
+
+  /** amount of input bytes available */
+  int avail_in;
+  /** next address to be read in input buffer */
+  char* next_in;
 } lz17_state_t;
 
 /** Initialize compression state 

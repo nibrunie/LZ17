@@ -15,14 +15,24 @@ enum {
 };
 
 
+typedef union {
+  char c;
+  unsigned char u;
+} uc_t;
 
 void lz17_compressInit(lz17_state_t* state, lz17_entropy_mode_t entropy_mode)
 {
   state->entropy_mode = entropy_mode;
+  state->ac_state = malloc(sizeof(ac_state_t));
 
   if (entropy_mode == LZ17_AC_ENTROPY_CODING) {
-    init_state(&state->ac_state, 16 /* precision */);
-    reset_uniform_probability(&state->ac_state);
+    init_state(state->ac_state, 16 /* precision */);
+    reset_uniform_probability(state->ac_state);
+
+    reset_prob_table(state->ac_state);
+    state->update_count = 0;
+    state->update_range = 1024;
+    state->range_clear  = 1;
   }
 }
 
@@ -177,7 +187,22 @@ static void __emit_byte(lz17_state_t* zstate, char byte)
   if (zstate->entropy_mode == LZ17_NO_ENTROPY_CODING) {
     __emit_header_byte(zstate, byte);
   } else if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
-    encode_character(zstate->next_out, byte, &(zstate->ac_state));
+    encode_character(zstate->next_out, byte, (zstate->ac_state));
+    // updating probability
+    uc_t table_index;
+    table_index.c = byte;
+    zstate->ac_state->prob_table[table_index.u]++;
+    zstate->update_count++;
+    if (zstate->update_count >= zstate->update_range)
+    {
+      transform_count_to_cumul(zstate->ac_state, zstate->update_count);
+      if (zstate->range_clear)
+      {
+        zstate->update_count = 0;
+        int j;
+        reset_prob_table(zstate->ac_state);
+      }
+    }
   } // FIXME, final else / assert
 }
 
@@ -201,18 +226,6 @@ static void __emit_match_offset(lz17_state_t* zstate, int offset)
   __emit_2byte_le(zstate, offset);
 }
 
-/** read a match offset from in + bindex
- *  and update bindex accordingly
- *  @param in input array
- *  @param pindex adresse of the current read index in @p in
- *  @return read match_offset (while updating *pindex value)
- */
-static int read_match_offset(char* in, int* pindex) 
-{
-  int match_offset = READU16(in + *pindex);
-  *pindex += 2;
-  return match_offset;
-}
 
 int lz17_compressBufferToBuffer(lz17_state_t* zstate, char* out, size_t avail_out, char* in, size_t avail_in)
 {
@@ -336,8 +349,8 @@ int lz17_compressBufferToBuffer(lz17_state_t* zstate, char* out, size_t avail_ou
   }
 
   if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
-    select_value(zstate->next_out, &(zstate->ac_state));
-    size_t encoded_size = (zstate->ac_state.out_index + 7) / 8;
+    select_value(zstate->next_out, (zstate->ac_state));
+    size_t encoded_size = (zstate->ac_state->out_index + 7) / 8;
     // next_out is not shifted by arithmetic coding
     // but was by header insertion, the following formula
     // allow us to add arithmetic coded size + header size
@@ -362,11 +375,67 @@ int lz17_bufferExtractExpandedSize(char* in)
 };
 
 
+char __lz17_decode_character(lz17_state_t* zstate) 
+{
+  char new_char = decode_character(zstate->next_in, zstate->ac_state); 
+  // updating probability
+  uc_t table_index;
+  table_index.c = new_char;
+  zstate->ac_state->prob_table[table_index.u]++;
+  zstate->update_count++;
+  if (zstate->update_count >= zstate->update_range)
+  {
+    transform_count_to_cumul(zstate->ac_state, zstate->update_count);
+    if (zstate->range_clear)
+    {
+      zstate->update_count = 0;
+      int j;
+      reset_prob_table(zstate->ac_state);
+    }
+  }
+  return new_char;
+}
+
+char __read_byte(lz17_state_t* zstate) {
+  if (zstate->entropy_mode == LZ17_NO_ENTROPY_CODING) {
+    zstate->avail_in--;
+    return *(zstate->next_in++);
+  } else if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
+    char new_char = __lz17_decode_character(zstate);
+    zstate->avail_in--;
+    return new_char;
+  };
+}
+
+
+/** read a match offset from in + bindex
+ *  and update bindex accordingly
+ *  @param in input array
+ *  @param pindex adresse of the current read index in @p in
+ *  @return read match_offset (while updating *pindex value)
+ */
+static int __read_match_offset(lz17_state_t* zstate) 
+{
+  if (zstate->entropy_mode == LZ17_NO_ENTROPY_CODING) {
+    int match_offset = READU16(zstate->next_in);
+    zstate->next_in += 2;
+    zstate->avail_in -= 2;
+    return match_offset;
+  } else if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
+    uc_t char_lo, char_hi;
+    char_lo.c = __lz17_decode_character(zstate);
+    char_hi.c = __lz17_decode_character(zstate);
+    int match_offset = char_lo.u | ((int) char_hi.u << 8);
+    return match_offset;
+  }
+}
+
+
 int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t avail_in)
 {
   int bindex = 0;
 
-  lz17_state_t* zstate = malloc(sizeof(zstate));
+  lz17_state_t* zstate = malloc(sizeof(lz17_state_t));
 
   // read and check headers
   char buffer_header = in[bindex++];
@@ -383,38 +452,59 @@ int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t 
     assert(0 && "unsupported LZ17 headers");
   }
 
+
+
+  int decompressed_size = 0;
+
   int buffer_size = READU32(in + bindex);
   bindex += 4;
   assert(buffer_size <= avail_out);
 
+  int header_size = bindex;
+  zstate->next_in  = in + header_size;
+  zstate->avail_in = avail_in - header_size; 
+  zstate->ac_state = malloc(sizeof(ac_state_t));
+
+  // initializing internal state
+  if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
+    init_state(zstate->ac_state, 16 /* precision */);
+    reset_uniform_probability(zstate->ac_state);
+    init_decoding(zstate->next_in, zstate->ac_state);
+
+    reset_prob_table(zstate->ac_state);
+    zstate->update_count = 0;
+    zstate->update_range = 1024;
+    zstate->range_clear  = 1;
+  }
+
   char* out_start = out;
 
   // read expected decompressed size
-  while (bindex < avail_in) {
-    if (in[bindex] & BACK_REF) {
+  while (decompressed_size < buffer_size && zstate->avail_in > 0) {
+    char current_byte = __read_byte(zstate);
+    if (current_byte & BACK_REF) {
       // back-reference
-      int match_length = in[bindex] & MAX_MATCH_SYMBOL;
-      bindex++;
-      int match_offset = read_match_offset(in, &bindex);//READU32(in + bindex);
-      // bindex += 4;
+      int match_length = current_byte & MAX_MATCH_SYMBOL;
+      int match_offset = __read_match_offset(zstate);
       int k;
       for (k = 0; k < match_length; ++k) out[k] = out[-match_offset + k];
 
       out += match_length;
-    } else if (!(in[bindex] & BACK_REF)) {
-      int copy_length = in[bindex] & MAX_MATCH_SYMBOL;
-      bindex++;
+      decompressed_size += match_length;
+    } else if (!(current_byte & BACK_REF)) {
+      int copy_length = current_byte & MAX_MATCH_SYMBOL;
       int k;
-      for (k = 0; k < copy_length; ++k) out[k] = in[bindex + k];
+      for (k = 0; k < copy_length; ++k) out[k] = __read_byte(zstate);
 
        out += copy_length;
-       bindex += copy_length;
+       decompressed_size += copy_length;
 
     } else {
       assert(0 && "unrecognized byte pattern");
     }
 
   }
+  assert(decompressed_size == (out - out_start));
 
   return out - out_start;;
 

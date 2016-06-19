@@ -13,8 +13,8 @@ CFLAGS += -g -O0
 liblz17.a: $(LIB_OBJECTS)
 	$(AR) rcs $@ $^
 
-clean: $(LIB_OBJECTS) liblz17.a
-	rm -f $^ $(TEST_LIST)
+clean: 
+	rm -f $(LIB_OBJECTS) liblz17.a $(TEST_LIST)
 
 lz17utils: liblz17.a utils/comp_util.c
 	$(CC) $(CFLAGS) $(LFLAGS) -I$(ARITH_CODING_PATH) -Ilib utils/comp_util.c -o lz17utils liblz17.a $(LIB_ARITH_CODING)
