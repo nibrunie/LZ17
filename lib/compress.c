@@ -6,7 +6,7 @@
 
 #include "lib/compress.h"
 
-
+#define DEFAULT_UPDATE_RANGE (1024)
 
 /** error code */
 enum {
@@ -31,7 +31,7 @@ void lz17_compressInit(lz17_state_t* state, lz17_entropy_mode_t entropy_mode)
 
     reset_prob_table(state->ac_state);
     state->update_count = 0;
-    state->update_range = 1024;
+    state->update_range = DEFAULT_UPDATE_RANGE;
     state->range_clear  = 1;
   }
 }
@@ -473,7 +473,7 @@ int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t 
 
     reset_prob_table(zstate->ac_state);
     zstate->update_count = 0;
-    zstate->update_range = 1024;
+    zstate->update_range = DEFAULT_UPDATE_RANGE;
     zstate->range_clear  = 1;
   }
 
