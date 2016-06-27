@@ -50,11 +50,11 @@ int main(int argc, char** argv) {
       break;
     case 'x':
       extract = 1;
-      if (compress) fprintf(stderr, "Option -x and -x and incompatible\n");
+      if (compress) fprintf(stderr, "Option -x and -c and incompatible\n");
       break;
     case 'c':
       compress = 1;
-      if (extract) fprintf(stderr, "Option -x and -x and incompatible\n");
+      if (extract) fprintf(stderr, "Option -x and -c and incompatible\n");
       break;
     case 'a':
       arith_coding = 1;
@@ -82,59 +82,33 @@ int main(int argc, char** argv) {
 
   size_t read_size = fread(read_buffer, sizeof(char), read_buffer_size, input_stream);
 
+  lz17_entropy_mode_t entropy_mode = LZ17_NO_ENTROPY_CODING;
+  if (arith_coding) entropy_mode = LZ17_AC_ENTROPY_CODING;
+
   if (compress) {
     size_t output_buffer_size = input_size * 2;
     char* output_buffer  = malloc(output_buffer_size * sizeof(char));
 
-    int compressed_size = lz17_compressBufferToBuffer(output_buffer, output_buffer_size, read_buffer, read_size);
+    lz17_state_t* zstate = malloc(sizeof(lz17_state_t));
+    lz17_compressInit(zstate, entropy_mode);
 
-    if (arith_coding) {
-      ac_state_t encoder_state;
-      const int update_range = 64;
 
-      char* encoded_buffer = malloc(compressed_size * sizeof(char));
-      // push compressed size (to allow decoding)
-      encoded_buffer[0] = compressed_size & 0xff;
-      encoded_buffer += 4;
-      // copy lz17 header and expanded size
-      memcpy(encoded_buffer, output_buffer, 5);
-      init_state(&encoder_state, 16);
-      reset_uniform_probability(&encoder_state);
-      encode_value_with_update(encoded_buffer + 5, output_buffer + 5, compressed_size - 5, &encoder_state, update_range, 0 /* range clear */); 
+    int compressed_size = lz17_compressBufferToBuffer(zstate, output_buffer, output_buffer_size, read_buffer, read_size);
 
-      size_t encoded_size = (encoder_state.out_index + 7) / 8;
-      // copy compressed buffer to output file
-      fwrite(encoded_buffer, encoded_size + 5, sizeof(char), output_stream);
-
-      free(encoded_buffer);
-    } else {
-      // copy compressed buffer to output file
-      fwrite(output_buffer, compressed_size, sizeof(char), output_stream);
-    }
+    // copy compressed buffer to output file
+    fwrite(output_buffer, compressed_size, sizeof(char), output_stream);
 
 
     free(read_buffer);
     free(output_buffer);
+    free(zstate);
 
   } else if (extract) {
     size_t output_buffer_size = lz17_bufferExtractExpandedSize(read_buffer);
-    char*  output_buffer  = malloc(output_buffer_size * sizeof(char));
+    char*  output_buffer      = malloc(output_buffer_size * sizeof(char));
 
-    if (arith_coding) {
-      char* decoded_buffer = malloc(output_buffer_size * sizeof(char));
-      memcpy(decoded_buffer, read_buffer, 5);
-      ac_state_t encoder_state;
-      const int update_range = 64;
-      reset_uniform_probability(&encoder_state);
-      decode_value_with_update(decoded_buffer + 5, read_buffer + 5, &encoder_state, output_buffer_size, update_range, 0/* range clear */);
-      
-      int decompressed_size = lz17_decompressBufferToBuffer(output_buffer, output_buffer_size, decoded_buffer, output_buffer_size); 
-      fwrite(output_buffer, decompressed_size, sizeof(char), output_stream);
-
-    } else {
-      int decompressed_size = lz17_decompressBufferToBuffer(output_buffer, output_buffer_size, read_buffer, read_size); 
-      fwrite(output_buffer, decompressed_size, sizeof(char), output_stream);
-    };
+    int decompressed_size = lz17_decompressBufferToBuffer(output_buffer, output_buffer_size, read_buffer, read_size); 
+    fwrite(output_buffer, decompressed_size, sizeof(char), output_stream);
 
     free(read_buffer);
     free(output_buffer);
