@@ -385,6 +385,7 @@ char __lz17_decode_character(lz17_state_t* zstate)
   zstate->update_count++;
   if (zstate->update_count >= zstate->update_range)
   {
+    assert(zstate->update_count == zstate->update_range);
     transform_count_to_cumul(zstate->ac_state, zstate->update_count);
     if (zstate->range_clear)
     {
@@ -402,7 +403,6 @@ char __read_byte(lz17_state_t* zstate) {
     return *(zstate->next_in++);
   } else if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
     char new_char = __lz17_decode_character(zstate);
-    zstate->avail_in--;
     return new_char;
   };
 }
@@ -486,6 +486,7 @@ int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t 
       // back-reference
       int match_length = current_byte & MAX_MATCH_SYMBOL;
       int match_offset = __read_match_offset(zstate);
+      assert(match_offset > 0 && match_length > 0 && "match length and offset must be positive");
       int k;
       for (k = 0; k < match_length; ++k) out[k] = out[-match_offset + k];
 
@@ -494,6 +495,7 @@ int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t 
     } else if (!(current_byte & BACK_REF)) {
       int copy_length = current_byte & MAX_MATCH_SYMBOL;
       int k;
+      assert(copy_length > 0 && "copy length must be positive");
       for (k = 0; k < copy_length; ++k) out[k] = __read_byte(zstate);
 
        out += copy_length;
@@ -506,7 +508,7 @@ int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t 
   }
   assert(decompressed_size == (out - out_start));
 
-  return out - out_start;;
+  return out - out_start;
 
 }
 

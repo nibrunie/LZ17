@@ -23,9 +23,9 @@ int test_generic(char* input, int input_size, lz17_entropy_mode_t entropy_mode)
 
   if (memcmp(decompressed, input, input_size)) {
     printf("ERROR: decompressed buffer does not match input\n");
-    int i;
+    int i, j;
     for (i = 0; i < input_size && decompressed[i] == input[i]; ++i);
-    printf("mismatch @index %d, decompressed[]=%x vs input[]=%x\n", i, decompressed[i], input[i]);
+    for (j = i -2; j < i+6; ++j) printf("mismatch @index %d, decompressed[]=%x vs input[]=%x\n", j, decompressed[j], input[j]);
     return 1;
   }
 
@@ -61,25 +61,6 @@ int main(void) {
       printf("testing LZ17 without arithmetic coding\n");
       break;
     };
-    size_t input_size = 512;
-    char* input        = malloc(sizeof(char) * input_size);
-
-    int i;
-    for (i = 0; i < input_size; ++i) input[i] = 0x2a; // rand();
-    printf("testing compression/decompression on 64B uniform buffer\n");
-    if (!test_generic(input, 64, entropy_mode)) printf("success\n");
-    else { printf("failure\n"); return 1;};
-
-    printf("testing compression/decompression on 512B uniform buffer\n");
-    if (!test_generic(input, 512, entropy_mode)) printf("success\n");
-    else { printf("failure\n"); return 1;};
-
-    for (i = 0; i < input_size; ++i) input[i] = 0x2a + (rand() % 3);
-    printf("testing compression/decompression on an almost uniform 512B buffer\n");
-    if (!test_generic(input, 512, entropy_mode)) printf("success\n");
-    else { printf("failure\n"); return 1;};
-
-    free(input);
     {
       size_t input_size = 1 << 18;
       char* input        = malloc(sizeof(char) * input_size);
@@ -90,6 +71,27 @@ int main(void) {
       for (i = 0; i < input_size; ++i) input[i] = 0x2a + (rand() % 3);
       printf("testing compression/decompression on an almost uniform %dB buffer\n", input_size);
       if (!test_generic(input, input_size, entropy_mode)) printf("success\n");
+      else { printf("failure\n"); return 1;};
+
+      free(input);
+    }
+    {
+      size_t input_size = 512;
+      char* input        = malloc(sizeof(char) * input_size);
+
+      int i;
+      for (i = 0; i < input_size; ++i) input[i] = 0x2a; // rand();
+      printf("testing compression/decompression on 64B uniform buffer\n");
+      if (!test_generic(input, 64, entropy_mode)) printf("success\n");
+      else { printf("failure\n"); return 1;};
+
+      printf("testing compression/decompression on 512B uniform buffer\n");
+      if (!test_generic(input, 512, entropy_mode)) printf("success\n");
+      else { printf("failure\n"); return 1;};
+
+      for (i = 0; i < input_size; ++i) input[i] = 0x2a + (rand() % 3);
+      printf("testing compression/decompression on an almost uniform 512B buffer\n");
+      if (!test_generic(input, 512, entropy_mode)) printf("success\n");
       else { printf("failure\n"); return 1;};
 
       free(input);
