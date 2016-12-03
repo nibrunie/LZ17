@@ -1,0 +1,4 @@
+language: c
+script: 
+  - git clone https://github.com/nibrunie/ArithmeticCoding.git && cd ArithmeticCoding && make && make lib && make test && cd ..
+  - export ARITH_CODING_DIR=./ArithmeticCoding && make && make test

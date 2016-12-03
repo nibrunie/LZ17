@@ -1,8 +1,10 @@
 LIB_SOURCES=lib/compress.c
 LIB_OBJECTS=$(LIB_SOURCES:.c=.o)
 
-LIB_ARITH_CODING = ../ArithmeticCoding/libarithcoding.a
-ARITH_CODING_PATH = ../ArithmeticCoding/lib/
+ARITH_CODING_DIR ?= ../ArithmeticCoding
+
+LIB_ARITH_CODING = $(ARITH_CODING_DIR)/libarithcoding.a
+ARITH_CODING_PATH = $(ARITH_CODING_DIR)/lib/
 
 TEST_LIST= test_buffer
 CFLAGS += -g -O0
