@@ -108,11 +108,10 @@ int get_match_length(char* addr0, char* addr1, int match_bound)
   return match_length;
 }
 
-enum {
-  BACK_REF = 0x80,
-  LITTERAL = 0x00,
-  MAX_MATCH_SYMBOL = 0x7f
-};
+const char BACK_REF = -128;
+const char LITTERAL = 0;
+const char MAX_MATCH_SYMBOL = 127;
+
 
 typedef enum {
   /** LZ17 compression */
@@ -206,7 +205,7 @@ static void __emit_byte(lz17_state_t* zstate, char byte)
   } // FIXME, final else / assert
 }
 
-static void __emit_header_4byte_le(lz17_state_t* zstate, int offset) 
+static void __emit_header_4byte_le(lz17_state_t* zstate, int offset)
 {
   __emit_header_byte(zstate, offset & 0xff);
   __emit_header_byte(zstate, (offset >> 8) & 0xff);
@@ -214,13 +213,13 @@ static void __emit_header_4byte_le(lz17_state_t* zstate, int offset)
   __emit_header_byte(zstate, (offset >> 24) & 0xff);
 }
 
-static  void __emit_2byte_le(lz17_state_t* zstate, int offset) 
+static  void __emit_2byte_le(lz17_state_t* zstate, int offset)
 {
   __emit_byte(zstate, offset & 0xff);
   __emit_byte(zstate, (offset >> 8) & 0xff);
 }
 
-static void __emit_match_offset(lz17_state_t* zstate, int offset) 
+static void __emit_match_offset(lz17_state_t* zstate, int offset)
 {
   assert(sizeof(int) == 4);
   __emit_2byte_le(zstate, offset);
@@ -447,7 +446,8 @@ int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t 
     zstate->entropy_mode = LZ17_AC_ENTROPY_CODING;
     break;
   default:
-    assert(0 && "unsupported LZ17 headers");
+    printf("ERROR: unsupported LZ17 headers, %x\n", buffer_header);
+    return -1;
   }
 
 

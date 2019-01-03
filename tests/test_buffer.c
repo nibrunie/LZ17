@@ -21,7 +21,7 @@ int test_generic(char* input, int input_size, lz17_entropy_mode_t entropy_mode)
   // lz17_displayCompressedStream(compressed, compressed_size);
 
   int ret = lz17_decompressBufferToBuffer(decompressed, input_size, compressed, compressed_size);
-  if (ret) {
+  if (!ret) {
     printf("ERROR: failed to decompress buffer, error=%d\n", ret);
     return 1;
   }
