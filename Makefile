@@ -6,8 +6,16 @@ ARITH_CODING_DIR ?= ../ArithmeticCoding
 LIB_ARITH_CODING = $(ARITH_CODING_DIR)/libarithcoding.a
 ARITH_CODING_PATH = $(ARITH_CODING_DIR)/lib/
 
+DEBUG_BUILD_CFLAGS = -Werror -g
+RELEASE_BUILD_CFLAGS =
+
 TEST_LIST= test_buffer
-CFLAGS += -Wall -Werror --pedantic -g -O0
+
+ifeq ($(BUILD_MODE),DEBUG)
+CFLAGS += -Wall $(DEBUG_BUILD_CFLAGS) --pedantic -g -O0
+else
+CFLAGS += -Wall $(RELEASE_BUILD_CFLAGS) --pedantic -O0
+endif
 
 %.o:%.c
 	$(CC) $(CFLAGS)  -I. -I$(ARITH_CODING_PATH) -c -o $@ $^
