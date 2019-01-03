@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <assert.h>
 
 #include "lib/compress.h"
@@ -20,6 +21,10 @@ int test_generic(char* input, int input_size, lz17_entropy_mode_t entropy_mode)
   // lz17_displayCompressedStream(compressed, compressed_size);
 
   int ret = lz17_decompressBufferToBuffer(decompressed, input_size, compressed, compressed_size);
+  if (ret) {
+    printf("ERROR: failed to decompress buffer, error=%d\n", ret);
+    return 1;
+  }
 
   if (memcmp(decompressed, input, input_size)) {
     printf("ERROR: decompressed buffer does not match input\n");
@@ -69,7 +74,7 @@ int main(void) {
       for (i = 0; i < input_size; ++i) input[i] = 0x2a; // rand();
 
       for (i = 0; i < input_size; ++i) input[i] = 0x2a + (rand() % 3);
-      printf("testing compression/decompression on an almost uniform %dB buffer\n", input_size);
+      printf("testing compression/decompression on an almost uniform %zuB buffer\n", input_size);
       if (!test_generic(input, input_size, entropy_mode)) printf("success\n");
       else { printf("failure\n"); return 1;};
 

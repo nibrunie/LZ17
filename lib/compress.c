@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <stdio.h>
 #include <assert.h>
 
@@ -135,11 +136,11 @@ typedef enum {
  */
 
 
-static const uint32_t PRIME32_1 = 2654435761U;
-static const uint32_t PRIME32_2 = 2246822519U;
-static const uint32_t PRIME32_3 = 3266489917U;
-static const uint32_t PRIME32_4 =  668265263U;
-static const uint32_t PRIME32_5 =  374761393U;
+static const __attribute__((unused)) uint32_t PRIME32_1 = 2654435761U;
+static const __attribute__((unused)) uint32_t PRIME32_2 = 2246822519U;
+static const __attribute__((unused)) uint32_t PRIME32_3 = 3266489917U;
+static const __attribute__((unused)) uint32_t PRIME32_4 =  668265263U;
+static const __attribute__((unused)) uint32_t PRIME32_5 =  374761393U;
 
 #define XXH_rotl32(x, s) ((x << s) | (x >> (32 - s)))
 
@@ -176,18 +177,18 @@ unsigned lz17_hash3(char* in)
   return XXH32_round(LZ17_HASH_SEED, READU24(in));
 }
 
-static void __emit_header_byte(lz17_state_t* zstate, char byte) 
+static void __emit_header_byte(lz17_state_t* zstate, char byte)
 {
   *(zstate->next_out) = byte;
   zstate->next_out++;
 }
 
-static void __emit_byte(lz17_state_t* zstate, char byte) 
+static void __emit_byte(lz17_state_t* zstate, char byte)
 {
   if (zstate->entropy_mode == LZ17_NO_ENTROPY_CODING) {
     __emit_header_byte(zstate, byte);
   } else if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
-    encode_character(zstate->next_out, byte, (zstate->ac_state));
+    encode_character((unsigned char*) zstate->next_out, byte, (zstate->ac_state));
     // updating probability
     uc_t table_index;
     table_index.c = byte;
@@ -199,7 +200,6 @@ static void __emit_byte(lz17_state_t* zstate, char byte)
       if (zstate->range_clear)
       {
         zstate->update_count = 0;
-        int j;
         reset_prob_table(zstate->ac_state);
       }
     }
@@ -214,7 +214,7 @@ static void __emit_header_4byte_le(lz17_state_t* zstate, int offset)
   __emit_header_byte(zstate, (offset >> 24) & 0xff);
 }
 
-static  __emit_2byte_le(lz17_state_t* zstate, int offset) 
+static  void __emit_2byte_le(lz17_state_t* zstate, int offset) 
 {
   __emit_byte(zstate, offset & 0xff);
   __emit_byte(zstate, (offset >> 8) & 0xff);
@@ -264,7 +264,7 @@ int lz17_compressBufferToBuffer(lz17_state_t* zstate, char* out, size_t avail_ou
     char* value_addr = NULL;
     char* search_addr = in + bindex;
     // if the hash table contains a match, then check and extend it
-    if (value_addr = hash_contains(hash, bhash)) {
+    if ((value_addr = hash_contains(hash, bhash))) {
       int match_length = get_match_length(value_addr, in + bindex, avail_in - bindex);
       // initial match offset
       int match_offset = (in + bindex - value_addr);
@@ -288,7 +288,7 @@ int lz17_compressBufferToBuffer(lz17_state_t* zstate, char* out, size_t avail_ou
         }
 
         // emit a back-reference
-        size_t total_match_length = match_length;
+        // size_t total_match_length = match_length;
         while (match_length > MAX_MATCH_SYMBOL_LENGTH) {
           __emit_byte(zstate, BACK_REF | MAX_MATCH_SYMBOL);
           __emit_match_offset(zstate, (in + bindex - value_addr));
@@ -305,7 +305,7 @@ int lz17_compressBufferToBuffer(lz17_state_t* zstate, char* out, size_t avail_ou
           bindex += match_length;
           match_length -= match_length;
         }
-        // bindex += total_match_length; 
+        // bindex += total_match_length;
 
       } else {
         // emit a litteral copy
@@ -313,7 +313,6 @@ int lz17_compressBufferToBuffer(lz17_state_t* zstate, char* out, size_t avail_ou
         litteral_length++;
         bindex++;
       };
-      
     } else {
       // emit a litteral copy
       if (litteral_length == 0) litteral_cpy_addr = in + bindex;
@@ -349,7 +348,7 @@ int lz17_compressBufferToBuffer(lz17_state_t* zstate, char* out, size_t avail_ou
   }
 
   if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
-    select_value(zstate->next_out, (zstate->ac_state));
+    select_value((unsigned char*) zstate->next_out, (zstate->ac_state));
     size_t encoded_size = (zstate->ac_state->out_index + 7) / 8;
     // next_out is not shifted by arithmetic coding
     // but was by header insertion, the following formula
@@ -370,14 +369,14 @@ int lz17_bufferExtractExpandedSize(char* in)
 
   int expanded_size = READU32(in + bindex);
   bindex += 4;
-  
-  return expanded_size; 
-};
+
+  return expanded_size;
+}
 
 
-char __lz17_decode_character(lz17_state_t* zstate) 
+char __lz17_decode_character(lz17_state_t* zstate)
 {
-  char new_char = decode_character(zstate->next_in, zstate->ac_state); 
+  char new_char = decode_character((unsigned char*) zstate->next_in, zstate->ac_state);
   // updating probability
   uc_t table_index;
   table_index.c = new_char;
@@ -390,7 +389,6 @@ char __lz17_decode_character(lz17_state_t* zstate)
     if (zstate->range_clear)
     {
       zstate->update_count = 0;
-      int j;
       reset_prob_table(zstate->ac_state);
     }
   }
@@ -401,7 +399,7 @@ char __read_byte(lz17_state_t* zstate) {
   if (zstate->entropy_mode == LZ17_NO_ENTROPY_CODING) {
     zstate->avail_in--;
     return *(zstate->next_in++);
-  } else if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
+  } else { // if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
     char new_char = __lz17_decode_character(zstate);
     return new_char;
   };
@@ -421,7 +419,7 @@ static int __read_match_offset(lz17_state_t* zstate)
     zstate->next_in += 2;
     zstate->avail_in -= 2;
     return match_offset;
-  } else if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
+  } else { // if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
     uc_t char_lo, char_hi;
     char_lo.c = __lz17_decode_character(zstate);
     char_hi.c = __lz17_decode_character(zstate);
@@ -469,7 +467,7 @@ int lz17_decompressBufferToBuffer(char* out, size_t avail_out, char* in, size_t 
   if (zstate->entropy_mode == LZ17_AC_ENTROPY_CODING) {
     init_state(zstate->ac_state, 16 /* precision */);
     reset_uniform_probability(zstate->ac_state);
-    init_decoding(zstate->next_in, zstate->ac_state);
+    init_decoding((unsigned char*) zstate->next_in, zstate->ac_state);
 
     reset_prob_table(zstate->ac_state);
     zstate->update_count = 0;
@@ -523,7 +521,6 @@ int lz17_displayCompressedStream(char* in, size_t avail_in)
       int match_offset = READU32(in + bindex);
       bindex += 4;
       printf("BACK_REF(len=%d,offset=%d)\n", match_length, match_offset);
-      int k;
     } else if (!(in[bindex] & BACK_REF)) {
       int copy_length = in[bindex] & MAX_MATCH_SYMBOL;
       bindex++;

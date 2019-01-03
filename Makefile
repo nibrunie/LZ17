@@ -7,15 +7,15 @@ LIB_ARITH_CODING = $(ARITH_CODING_DIR)/libarithcoding.a
 ARITH_CODING_PATH = $(ARITH_CODING_DIR)/lib/
 
 TEST_LIST= test_buffer
-CFLAGS += -g -O0
+CFLAGS += -Wall -Werror --pedantic -g -O0
 
-%.o:%.c 
+%.o:%.c
 	$(CC) $(CFLAGS)  -I. -I$(ARITH_CODING_PATH) -c -o $@ $^
 
 liblz17.a: $(LIB_OBJECTS)
 	$(AR) rcs $@ $^
 
-clean: 
+clean:
 	rm -f $(LIB_OBJECTS) liblz17.a $(TEST_LIST)
 
 lz17utils: liblz17.a utils/comp_util.c
