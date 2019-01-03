@@ -1,4 +1,4 @@
-# LZ17
+# LZ17 [![Build Status](https://travis-ci.org/nibrunie/LZ17.svg?branch=master)](https://travis-ci.org/nibrunie/LZ17)
 Compression Format, encoder and decoder to learn the basic of compression
 
 # Format description
