@@ -6,8 +6,10 @@
 #include <unistd.h>
 
 
-#include "arith_coding.h" 
+#include "arith_coding.h"
 #include "compress.h"
+
+#include "utils/lz17utils_opt.h"
 
 
 extern char *optarg;
@@ -27,50 +29,26 @@ off_t fsize(const char *filename) {
 int main(int argc, char** argv) { 
   char* input_filename;
   char* output_filename;
-  char copt;
   int errorflag = 0;
   int extract = 0;
   int compress = 0;
-  int arith_coding = 0;
-  char c = '?';
 
-  while ((c = getopt(argc, argv, "xcai:o:")) != -1)
-  {
-    switch(c) {
-    case 'i':
-      input_filename = optarg;
-      break;
-    case 'o':
-      output_filename = optarg;
-      break;
-    case ':':       
-      /* -f or -o without operand */
-      fprintf(stderr, "Option -%c requires an operand\n", optopt);
-      errorflag++;
-      break;
-    case 'x':
-      extract = 1;
-      if (compress) fprintf(stderr, "Option -x and -c and incompatible\n");
-      break;
-    case 'c':
-      compress = 1;
-      if (extract) fprintf(stderr, "Option -x and -c and incompatible\n");
-      break;
-    case 'a':
-      arith_coding = 1;
-      break;
-    case '?':
-    default: 
-      fprintf(stderr, "Unrecognized option: -%c\n", optopt);
-      errorflag++;
-      break;
-    };
-  }
+  struct gengetopt_args_info args_info;
+
 
   if (errorflag) {
     fprintf(stderr, "usage: . . . ");
     exit(2);
   }
+
+  if (cmdline_parser (argc, argv, &args_info) != 0)
+      exit(1) ;
+
+  input_filename = args_info.input_arg;
+  output_filename = args_info.output_arg;
+  compress = args_info.compress_flag;
+
+  extract = args_info.extract_flag;
 
   FILE* input_stream  = fopen(input_filename, "r");
   FILE* output_stream = fopen(output_filename, "w");
@@ -83,7 +61,7 @@ int main(int argc, char** argv) {
   size_t read_size = fread(read_buffer, sizeof(char), read_buffer_size, input_stream);
 
   lz17_entropy_mode_t entropy_mode = LZ17_NO_ENTROPY_CODING;
-  if (arith_coding) entropy_mode = LZ17_AC_ENTROPY_CODING;
+  if (args_info.arith_coding_given) entropy_mode = LZ17_AC_ENTROPY_CODING;
 
   if (compress) {
     size_t output_buffer_size = input_size * 2;

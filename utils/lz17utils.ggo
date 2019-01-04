@@ -1,0 +1,12 @@
+package "lz17utils"
+version "0.1"
+description "dummy compressor utility"
+
+
+defmode "compression"
+modeoption "compress" c "compress given input toward output" flag off mode="compression"
+modeoption "extract" x "uncompress given input toward output" flag off mode="compression"
+option "arith-coding" a "enable arithmetic coding" optional
+option "input" i  "the input file" string typestr="filename" required
+option "output" o  "the output file" string typestr="filename" required
+

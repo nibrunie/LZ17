@@ -26,8 +26,11 @@ liblz17.a: $(LIB_OBJECTS)
 clean:
 	rm -f $(LIB_OBJECTS) liblz17.a $(TEST_LIST)
 
-lz17utils: liblz17.a utils/comp_util.c
-	$(CC) $(CFLAGS) $(LFLAGS) -I$(ARITH_CODING_PATH) -Ilib utils/comp_util.c -o lz17utils liblz17.a $(LIB_ARITH_CODING)
+lz17utils: liblz17.a utils/comp_util.c utils/lz17utils_opt.c
+	$(CC) $(CFLAGS) $(LFLAGS) -I$(ARITH_CODING_PATH) -I./ -Ilib utils/comp_util.c utils/lz17utils_opt.c -o lz17utils liblz17.a $(LIB_ARITH_CODING)
+
+utils/lz17utils_opt.c: utils/lz17utils.ggo
+	gengetopt --file-name=utils/lz17utils_opt < $^
 
 define gen_test_rule
 $(1): tests/$(1).o liblz17.a
