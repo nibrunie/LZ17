@@ -32,6 +32,16 @@ lz17utils: liblz17.a utils/comp_util.c utils/lz17utils_opt.c
 utils/lz17utils_opt.c: utils/lz17utils.ggo
 	gengetopt --file-name=utils/lz17utils_opt < $^
 
+test_utils: lz17utils
+	./lz17utils -c -a -i ./LICENSE -o LICENSE.az17
+	./lz17utils -c -i ./LICENSE -o LICENSE.z17
+	./lz17utils -x -i LICENSE.az17 -o LICENSE.az17.out
+	./lz17utils -x -i LICENSE.z17 -o LICENSE.z17.out
+	diff ./LICENSE ./LICENSE.az17.out
+	diff ./LICENSE ./LICENSE.z17.out
+
+test: test_utils
+
 define gen_test_rule
 $(1): tests/$(1).o liblz17.a
 	$(CC) $(CFLAGS) tests/$(1).o -o $(1) liblz17.a $(LIB_ARITH_CODING)
@@ -42,3 +52,4 @@ endef
 
 $(foreach test_name,$(TEST_LIST),$(eval $(call gen_test_rule,$(test_name))))
 
+.PHONY: test test_utils
